@@ -2,8 +2,8 @@
 import sys, os, dropbox, time
 from datetime import datetime
 
-APP_KEY = 'hacwza866qep9o6'   # INSERT APP_KEY HERE
-APP_SECRET = 'kgipko61g58n6uc'     # INSERT APP_SECRET HERE
+APP_KEY = ''   # INSERT APP_KEY HERE
+APP_SECRET = ''     # INSERT APP_SECRET HERE
 DELAY = 0.2 # delay between each file (try to stay under API rate limits)
 
 HELP_MESSAGE = \
@@ -49,32 +49,35 @@ def parse_date(s):
 
 
 def restore_file(client, path, cutoff_datetime, is_deleted, verbose=False):
-    revisions = client.files_list_revisions(path.encode('utf8'))
-    revision_dict = dict((r.server_modified, r) for r in revisions.entries)
+    if os.path.isfile(path.encode('utf8')):
+        revisions = client.files_list_revisions(path.encode('utf8'))
+        revision_dict = dict((r.server_modified, r) for r in revisions.entries)
 
-    # skip if current revision is the same as it was at the cutoff
-    if max(revision_dict.keys()) < cutoff_datetime:
-        if verbose:
-            print(path.encode('utf8') + ' SKIP')
-        return
+        # skip if current revision is the same as it was at the cutoff
+        if max(revision_dict.keys()) < cutoff_datetime:
+            if verbose:
+                print(path.encode('utf8') + ' SKIP')
+            return
 
-    # look for the most recent revision before the cutoff
-    pre_cutoff_modtimes = [d for d in revision_dict.keys()
-                           if d < cutoff_datetime]
-    if len(pre_cutoff_modtimes) > 0:
-        modtime = max(pre_cutoff_modtimes)
-        rev = revision_dict[modtime].rev
-        if verbose:
-            print(path.encode('utf8') + ' ' + str(modtime))
-        client.files_restore(path.encode('utf8'), rev)
+        # look for the most recent revision before the cutoff
+        pre_cutoff_modtimes = [d for d in revision_dict.keys()
+                               if d < cutoff_datetime]
+        if len(pre_cutoff_modtimes) > 0:
+            modtime = max(pre_cutoff_modtimes)
+            rev = revision_dict[modtime].rev
+            if verbose:
+                print(path.encode('utf8') + ' ' + str(modtime))
+            client.files_restore(path.encode('utf8'), rev)
+        else:   # there were no revisions before the cutoff, so delete
+            if verbose:
+                print(path.encode('utf8') + ' ' + ('SKIP' if is_deleted else 'DELETE'))
+            # TODO: Restore functionality whereby a file that didn't exist at that
+            # point in time will get deleted.
+            #if not is_deleted:
+            #    client.file_delete(path.encode('utf8'))
     else:   # there were no revisions before the cutoff, so delete
         if verbose:
-            print(path.encode('utf8') + ' ' + ('SKIP' if is_deleted else 'DELETE'))
-        # TODO: Restore functionality whereby a file that didn't exist at that
-        # point in time will get deleted.
-        #if not is_deleted:
-        #    client.file_delete(path.encode('utf8'))
-
+            print(path.encode('utf8') + ' ' + 'SKIP: not a file')
 
 def restore_folder(client, path, cutoff_datetime, verbose=False):
     if verbose:
@@ -92,8 +95,7 @@ def restore_folder(client, path, cutoff_datetime, verbose=False):
         else:
             # TODO: Restore functionality whereby a file that didn't exist at that
             # point in time will get deleted.
-            restore_file(client, item.path_lower, cutoff_datetime,
-                         False, verbose)
+            restore_file(client, item.path_lower, cutoff_datetime, False, verbose)
         time.sleep(DELAY)
 
 
